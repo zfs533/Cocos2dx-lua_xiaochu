@@ -8,6 +8,11 @@ ChunkMain.secoundChunk = nil --第二次选中的Chunk
 ChunkMain.actionTime = 0.3
 ChunkMain.imgRes = nil
 ChunkMain.layer = nil
+ChunkMain.tempIsHor = false
+ChunkMain.tempIsAdd = false
+ChunkMain.tempPos01 = cc.p(0,0)
+ChunkMain.tempPos02 = cc.p(0,0)
+
 --[[----------------------------------------------------------------]]
 function cc.exports.ChunkMainCreateScene()
     local scene = cc.Scene:create()
@@ -67,12 +72,6 @@ function ChunkMain:layoutChunk(layer)
         {normal="three/07.png",selected="three/007.png",type=8},
     }
     self.imgRes = imgRes
---    local chunkTouchEvent = function(target,state)
---        if state == ccui.TouchEventType.ended then
---            self:handleSelectedChunk(target)
---        end
---    end
-    
     
     for i = 1, self.rangeHor do
         self.chunkArr[i] = {}
@@ -80,6 +79,7 @@ function ChunkMain:layoutChunk(layer)
             local random = math.floor(math.random(1,#imgRes))
             local chunk = Star:createStar(imgRes[random])
             local sz = chunk:getContentSize()
+            chunk:setPosition(sz.width/2 + sz.width*(i-1),sz.height/2+sz.height*self.rangeVer+(j*sz.height))
             self:runLayoutChunkAction(chunk,j/5,cc.p(sz.width/2 + sz.width*(i-1),sz.height/2+sz.height*(j-1)))
             chunk:setHorAndVerCoordinate(i,j)
             chunk:addTouchEventListener(function(target,state) self:chunkTouchEvent(target,state) end)
@@ -87,11 +87,18 @@ function ChunkMain:layoutChunk(layer)
             self.chunkArr[i][j] = chunk
         end
     end
+    local scheduler = cc.Director:getInstance():getScheduler() 
+    local mm = nil
+    mm = scheduler:scheduleScriptFunc(function() 
+        self:checkAllChunk()
+        scheduler:unscheduleScriptEntry(mm);
+    end, 2, false)
 end
 --  初始化排列动作
 function ChunkMain:runLayoutChunkAction(target,time,pos)
     local moveTo = cc.MoveTo:create(time,pos)
-    target:runAction(moveTo)
+    local elastic01 = cc.EaseBackOut:create(moveTo);
+    target:runAction(elastic01)
 end
 --  选中chunk逻辑
 function ChunkMain:handleSelectedChunk(target)
@@ -157,13 +164,23 @@ function ChunkMain:startChangeAction()
     end
 end
 --  播放移动交换动作
-function ChunkMain:playAction(chunk01,chunk02,pos01,pos02,isHor,isAdd)
+function ChunkMain:playAction(chunk01,chunk02,pos01,pos02,isHor,isAdd,isNot)
+    self.tempIsAdd = isAdd
+    self.tempIsHor = isHor
+    self.tempPos01 = pos01
+    self.tempPos02 = pos02
     local time = self.actionTime
     local moveTo01 = cc.MoveTo:create(time,pos01)
     local moveTo02 = cc.MoveTo:create(time,pos02)
     local elastic01 = cc.EaseBackOut:create(moveTo01);
     local elastic02 = cc.EaseBackOut:create(moveTo02);
-    local callback = cc.CallFunc:create(function() self:startCheckChunk() end)
+    local callback = cc.CallFunc:create(function() 
+        if not isNot then
+            self:startCheckChunk() 
+        else
+            self:clearChunk()
+        end
+    end)
     local sequence = cc.Sequence:create(elastic01,callback)
     chunk01:runAction(sequence)
     chunk02:runAction(elastic02)
@@ -213,8 +230,6 @@ function ChunkMain:startCheckChunk()
     local chunk02 = ChunkMain.secoundChunk 
     chunk01:clearStarState()
     chunk02:clearStarState()
-    ChunkMain.firstChunk = nil
-    ChunkMain.secoundChunk = nil
     self:checkAllChunk()
 end
 --  检测所有chunk，将满足条件的chunk赛选出来
@@ -227,11 +242,13 @@ function ChunkMain:checkAllChunk()
             local chunk01 = self.chunkArr[i][j]
             local chunk02 = self.chunkArr[i][j+1]
             local chunk03 = self.chunkArr[i][j+2]
-            if chunk01.type == chunk02.type and chunk01.type == chunk03.type then
-                table.insert(tempArr,1,chunk01)    -- 这里要单独存一个table
-                table.insert(tempArr,1,chunk02)
-                table.insert(tempArr,1,chunk03)
-                table.insert(sameChunkArr,1,tempArr)
+            if chunk01 and chunk02 and chunk03 then
+                if chunk01.type == chunk02.type and chunk01.type == chunk03.type then
+                    table.insert(tempArr,1,chunk01)    -- 这里要单独存一个table
+                    table.insert(tempArr,1,chunk02)
+                    table.insert(tempArr,1,chunk03)
+                    table.insert(sameChunkArr,1,tempArr)
+                end
             end
         end
     end
@@ -242,11 +259,13 @@ function ChunkMain:checkAllChunk()
             local chunk01 = self.chunkArr[i][j]
             local chunk02 = self.chunkArr[i+1][j]
             local chunk03 = self.chunkArr[i+2][j]
-            if chunk01.type == chunk02.type and chunk01.type == chunk03.type then
-                table.insert(tempArr,1,chunk01)    -- 这里要单独存一个table
-                table.insert(tempArr,1,chunk02)
-                table.insert(tempArr,1,chunk03)
-                table.insert(sameChunkArr,1,tempArr)
+            if chunk01 and chunk02 and chunk03 then
+                if chunk01.type == chunk02.type and chunk01.type == chunk03.type then
+                    table.insert(tempArr,1,chunk01)    -- 这里要单独存一个table
+                    table.insert(tempArr,1,chunk02)
+                    table.insert(tempArr,1,chunk03)
+                    table.insert(sameChunkArr,1,tempArr)
+                end
             end
         end
     end
@@ -258,6 +277,17 @@ function ChunkMain:checkAllChunk()
         end
     end
     self:distoryChunk(chunkArr)
+    if table.getn(sameChunkArr) < 1 then
+        self:reSetChunkPos()
+    end
+end
+-- 交换后没有找到符合条件的chunk，还原
+function ChunkMain:reSetChunkPos()
+    local chunk01 = ChunkMain.firstChunk
+    local chunk02 = ChunkMain.secoundChunk
+    if chunk01 and chunk02 then
+        self:playAction(chunk01,chunk02,self.tempPos02,self.tempPos01,self.tempIsHor,not self.tempIsAdd,true)
+    end
 end
 
 function ChunkMain:distoryChunk(chunkArr)
@@ -269,8 +299,19 @@ function ChunkMain:distoryChunk(chunkArr)
         self.chunkArr[chunk.hor][chunk.ver] = nil
         chunk:removeFromParent()
     end
+--    消除后清空firstChunk,secoundChunk
+    if len > 0 then 
+        self:clearChunk()
+    end
     self:reLayoutChunk()
 end
+
+--清空firstChunk,secoundChunk
+function ChunkMain:clearChunk()
+    ChunkMain.firstChunk = nil
+    ChunkMain.secoundChunk = nil
+end
+
 --去掉重复的项
 function ChunkMain:pickStarTable(tab)
     local mm = tab
@@ -306,14 +347,6 @@ function ChunkMain:checkVerticalMove(hor,ver)
         print("count= "..count)
         if not chunk then
             count = count + 1
---            local random = math.floor(math.random(1,#self.imgRes))
---            local chunk = Star:createStar(self.imgRes[random])
---            local sz = chunk:getContentSize()
---            self:runLayoutChunkAction(chunk,time,cc.p(sz.width/2 + sz.width*(hor-1),sz.height/2+sz.height*(self.rangeVer-1+count)))
---            chunk:setHorAndVerCoordinate(hor,self.rangeVer-1+count)
---            chunk:addTouchEventListener(function(target,state) self:chunkTouchEvent(target,state) end)
---            self.layer:addChild(chunk,5)
---            self.chunkArr[hor][self.rangeVer-1+count] = chunk
         else
             local moveTo = cc.MoveTo:create(time,cc.p(chunk:getPositionX(),chunk:getPositionY()-chunk:getContentSize().height*count))
             local elastic01 = cc.EaseBackOut:create(moveTo);
@@ -323,22 +356,43 @@ function ChunkMain:checkVerticalMove(hor,ver)
             self.chunkArr[hor][i] = nil
         end
     end
+    
+    local scheduler = cc.Director:getInstance():getScheduler() 
+    local mm = nil
+    mm = scheduler:scheduleScriptFunc(function() 
+        self:checkEmptyAndAddNewChunk()
+        scheduler:unscheduleScriptEntry(mm);
+    end, time, false)
 end
-
-
-
-
-function ChunkMain:checkVertical()
-
+--  补全
+function ChunkMain:checkEmptyAndAddNewChunk()
+    local time = 0.2
+    local count = 0
+    for i = 1,self.rangeHor do
+        count = 0
+        for j = 1,self.rangeVer do
+            local chunk = self.chunkArr[i][j]
+            if not chunk then
+                count = count + 1
+                local random = math.floor(math.random(1,#self.imgRes))
+                local chunk = Star:createStar(self.imgRes[random])
+                local sz = chunk:getContentSize()
+                chunk:setPosition(sz.width/2 + sz.width*(i-1),sz.height/2+sz.height*self.rangeVer+(count*sz.height))
+                self:runLayoutChunkAction(chunk,time,cc.p(sz.width/2 + sz.width*(i-1),sz.height/2+sz.height*(j-1)))
+                chunk:setHorAndVerCoordinate(i,j)
+                chunk:addTouchEventListener(function(target,state) self:chunkTouchEvent(target,state) end)
+                self.layer:addChild(chunk,5)
+                self.chunkArr[i][j] = chunk
+            end
+        end
+    end
+    local scheduler = cc.Director:getInstance():getScheduler() 
+    local mm = nil
+    mm = scheduler:scheduleScriptFunc(function() 
+        self:checkAllChunk()
+        scheduler:unscheduleScriptEntry(mm);
+    end, time, false)
 end
-
-function ChunkMain:checkHorizontal()
-
-end
-
-
-
-
 
 
 

@@ -2,8 +2,6 @@
 local size = cc.Director:getInstance():getWinSize()
 local WelComeLayer = {}
 
-
-
 WelComeLayer.createLayer = function()
     local self = WelComeLayer
     local layer = cc.Layer:create()
@@ -51,6 +49,15 @@ WelComeLayer.layoutUi = function(layer)
         end
     end
     
+    local function helpBtnEvent(target,state)
+        if state == ccui.TouchEventType.ended then
+            local Dragon = import("src.app.hundragon.Dragon")
+            local scene = Dragon:new()
+            local act = cc.TransitionFadeUp:create(0.5,scene)
+            cc.Director:getInstance():replaceScene(act)
+        end
+    end
+    
     local newgameBtn = ccui.Button:create("star/newgame.png","","")
     newgameBtn:setPosition(basePos.x,basePos.y)
     layer:addChild(newgameBtn,1)
@@ -64,6 +71,7 @@ WelComeLayer.layoutUi = function(layer)
     local helpBtn = ccui.Button:create("star/help.png","","")
     helpBtn:setPosition(basePos.x,resumeBtn:getPositionY()-helpBtn:getContentSize().height-gap)
     layer:addChild(helpBtn,1)
+    helpBtn:addTouchEventListener(helpBtnEvent)
     
     local exitBtn = ccui.Button:create("star/exit.png")
     exitBtn:setPosition(basePos.x,helpBtn:getPositionY()-exitBtn:getContentSize().height-gap)

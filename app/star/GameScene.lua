@@ -78,7 +78,6 @@ GameScene.layoutStar = function(layer,self)
             local rand = math.floor(math.random(1,len))
             local star = Star:createStar(imgRes[rand]) 
             local sz = star:getContentSize()
---            star:setPosition(sz.width/2 +sz.width*(i-1),sz.height/2 +sz.height*(j-1))
             self:runLayoutChunkAction(star,j/5,cc.p(sz.width/2 +sz.width*(i-1),sz.height/2 +sz.height*(j-1)))
             star:setHorAndVerCoordinate(i,j)
             star:addTouchEventListener(starEvent)
@@ -110,19 +109,8 @@ end
 -- 从四个方向寻找相同颜色Star
 function GameScene:checkByDirection(star)
     local tempArr = self:checkByDirectionFour(star)
-    local len = #tempArr
     local len01 = #self.sameStar
-    for i = 1,len do
-        for j = 1,len01 do
-            if self.sameStar[j].hor == tempArr[i].hor and self.sameStar[j].ver == tempArr[i].ver then
-                break 
-            elseif j == len01 then
-                table.insert(self.sameStar,len01,tempArr[i])
-                self:checkByDirection(tempArr[i])
-                break;
-            end
-        end
-    end
+
     for i = 1, self.range do
         for j = 1, self.range do
             local star = self.starArr[i][j]
@@ -131,26 +119,10 @@ function GameScene:checkByDirection(star)
             end
         end 
     end
-    self.sameStar = self:pickStarTable(self.sameStar)
     len01 = #self.sameStar
     for nn = 1,len01 do
         self.sameStar[nn]:changeStarState()
     end
-end
-
---去掉重复的项
-function GameScene:pickStarTable(tab)
-    local mm = tab
-    for i = 1,table.getn(mm)-1 do
-        for j = i+1,table.getn(mm) do
-            if mm[i].hor == mm[j].hor and mm[i].ver == mm[j].ver then
-                table.remove(mm,j)
-                self:pickStarTable(mm)
-                break
-            end
-        end
-    end
-    return tab
 end
 
 --判断两个star类型是否相同
@@ -160,6 +132,7 @@ function GameScene:checkStarType(star,tempStar)
     end
     return false
 end
+
 --从四个方向查找相同类型的star
 function GameScene:checkByDirectionFour(star)
     local tempArr = {}
@@ -171,7 +144,10 @@ function GameScene:checkByDirectionFour(star)
         local tempStar = self.starArr[star.hor+1][star.ver]
         local starR = self:checkStarType(star,tempStar)
         if starR then
-            table.insert(tempArr,len+1,starR)
+            if not self:jugementIsExist(starR) then
+                table.insert(self.sameStar,1,starR)
+                self:checkByDirectionFour(starR)
+            end
         end
     end
     --    left
@@ -180,7 +156,10 @@ function GameScene:checkByDirectionFour(star)
         tempStar = self.starArr[star.hor-1][star.ver]
         starR = self:checkStarType(star,tempStar)
         if starR then
-            table.insert(tempArr,len+1,starR)
+            if not self:jugementIsExist(starR) then
+                table.insert(self.sameStar,1,starR)
+                self:checkByDirectionFour(starR)
+            end
         end
     end
     --    up
@@ -189,7 +168,10 @@ function GameScene:checkByDirectionFour(star)
         tempStar = self.starArr[star.hor][star.ver+1]
         starR = self:checkStarType(star,tempStar)
         if starR then
-            table.insert(tempArr,len+1,starR)
+            if not self:jugementIsExist(starR) then
+                table.insert(self.sameStar,1,starR)
+                self:checkByDirectionFour(starR)
+            end
         end
     end
     --    down
@@ -198,20 +180,31 @@ function GameScene:checkByDirectionFour(star)
         tempStar = self.starArr[star.hor][star.ver-1]
         starR = self:checkStarType(star,tempStar)
         if starR then
-            table.insert(tempArr,len+1,starR)
+            if not self:jugementIsExist(starR) then
+                table.insert(self.sameStar,1,starR)
+                self:checkByDirectionFour(starR)
+            end
         end
     end
     
-    return tempArr
+--    return tempArr
 end
-
+--判断sameStar序列里是否已经存在star
+function GameScene:jugementIsExist(star)
+    local starArr = self.sameStar
+    for i = 1,#starArr do
+        if star.hor == starArr[i].hor and star.ver == starArr[i].ver and star.type == starArr[i].type then
+            return true
+        end
+    end
+    return false
+end
 --执行消除后重新排列
 function GameScene:reLayoutStar()
     for i = 1,self.range do
         for j = 1, self.range do
             local starV = self.starArr[i][j]
             if not starV then
-                print("i= " .. i .. " j= " .. j)
                 self:checkVerticalMove(i,j)
                 break;
             end
@@ -227,7 +220,6 @@ function GameScene:checkVerticalMove(hor,ver)
         if not star then
             count = count + 1
         else
-            print("i== " .. hor .. " j== " .. i)
             local moveTo = cc.MoveTo:create(time,cc.p(star:getPositionX(),star:getPositionY()-star:getContentSize().height*count))
             star:runAction(moveTo)
             self.starArr[hor][i].ver = self.starArr[hor][i].ver - count
